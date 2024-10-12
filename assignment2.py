@@ -1,71 +1,56 @@
-import pandas as pd
-import numpy as np
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
+from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import accuracy_score
-from sklearn.preprocessing import LabelEncoder
-from sklearn.impute import SimpleImputer
-import joblib
+from sklearn.model_selection import train_test_split
+import pandas as pd
 
-# Load the training data
-train_url = "https://github.com/dustywhite7/Econ8310/raw/master/AssignmentData/assignment3.csv"
-train_data = pd.read_csv(train_url)
+def load_data(url):
+    return pd.read_csv(url)
 
-# Prepare the data
-X = train_data.drop(['meal'], axis=1)
-y = train_data['meal']
+def prepare_features(df):
+    target = df["meal"]
+    features = df.drop(["meal", "id", "DateTime"], axis=1)
+    return features, target
 
-# Identify numeric and categorical columns
-numeric_features = X.select_dtypes(include=['int64', 'float64']).columns
-categorical_features = X.select_dtypes(include=['object']).columns
+def create_model():
+    return DecisionTreeClassifier(max_depth=15, min_samples_leaf=5, random_state=42)
 
-# Handle missing values
-imputer = SimpleImputer(strategy='mean')
-X[numeric_features] = imputer.fit_transform(X[numeric_features])
+def evaluate_model(model, X, y):
+    predictions = model.predict(X)
+    return round(100 * accuracy_score(y, predictions), 2)
 
-# Encode categorical variables
-le = LabelEncoder()
-for feature in categorical_features:
-    X[feature] = le.fit_transform(X[feature].astype(str))
+def main():
+    # Load and prepare training data
+    train_url = "https://github.com/dustywhite7/Econ8310/raw/master/AssignmentData/assignment3.csv"
+    df = load_data(train_url)
+    features, target = prepare_features(df)
 
-# Split the data into training and validation sets
-X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
+    # Split the data
+    train_X, test_X, train_Y, test_Y = train_test_split(features, target, test_size=0.33, random_state=42)
 
-# Create the model
-model = RandomForestClassifier(n_estimators=100, random_state=42)
+    # Create and train the model
+    model = create_model()
+    modelFit = model.fit(train_X, train_Y)
 
-# Fit the model
-modelFit = model.fit(X_train, y_train)
+    # Evaluate the model
+    print(f"\n\nIn-sample accuracy: {evaluate_model(model, train_X, train_Y)}%\n\n")
+    print(f"\n\nOut-of-sample accuracy: {evaluate_model(model, test_X, test_Y)}%\n\n")
 
-# Validate the model
-val_predictions = modelFit.predict(X_val)
-accuracy = accuracy_score(y_val, val_predictions)
-print(f"Validation Accuracy: {accuracy:.4f}")
+    # Load and prepare test data
+    test_url = "https://github.com/dustywhite7/Econ8310/raw/master/AssignmentData/assignment3test.csv"
+    test_df = load_data(test_url)
+    new_test, _ = prepare_features(test_df)
 
-# Save the model
-joblib.dump(modelFit, 'random_forest_model.joblib')
+    # Make predictions
+    pred = model.predict(new_test)
 
-# Load the test data
-test_url = "https://github.com/dustywhite7/Econ8310/raw/master/AssignmentData/assignment3test.csv"
-test_data = pd.read_csv(test_url)
+    # Add predictions to the test dataframe
+    test_df["predicted_meal"] = pred
 
-# Preprocess test data
-test_data[numeric_features] = imputer.transform(test_data[numeric_features])
-for feature in categorical_features:
-    test_data[feature] = le.transform(test_data[feature].astype(str))
+    # Display the first few predictions
+    print(test_df[["id", "predicted_meal"]].head())
 
-# Make predictions on the test data
-pred = modelFit.predict(test_data)
+    # Save predictions to a CSV file
+    test_df[["id", "predicted_meal"]].to_csv("meal_predictions.csv", index=False)
 
-# Convert predictions to integer (0 or 1)
-pred = pred.astype(int)
-
-# Print the first few predictions
-print("First few predictions:")
-print(pred[:10])
-
-# Print the total number of predictions
-print(f"Total number of predictions: {len(pred)}")
-
-# Optional: Save predictions to a CSV file
-pd.DataFrame(pred, columns=['meal_prediction']).to_csv('predictions.csv', index=False)
+if __name__ == "__main__":
+    main()
